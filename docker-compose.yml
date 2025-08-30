@@ -1,0 +1,32 @@
+services:
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: admin
+      MARIADB_DATABASE: videodb
+    ports:
+      - "3306:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -padmin --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "4000:4000"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+    environment:
+      DB_HOST: mariadb
+
+volumes:
+  dbdata:
