@@ -1,3 +1,4 @@
+// I take Reference from AI tool to do all this assignment chatgpt4.5
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -10,7 +11,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// static for uploaded files (optional)
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));

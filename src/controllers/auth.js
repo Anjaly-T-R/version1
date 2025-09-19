@@ -32,7 +32,7 @@ export const login = async (req, res, next) => {
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
-    // include role; require JWT_SECRET to be set
+    // include role
     const token = jwt.sign(
       { sub: Number(user.id), role: user.role || 'user' },
       process.env.JWT_SECRET,

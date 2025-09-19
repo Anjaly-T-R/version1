@@ -1,0 +1,12 @@
+END=$((SECONDS+600)); PAR=32; VID=2; JWT='PASTE_JWT_HERE'
+while [ $SECONDS -lt $END ]; do
+  for i in $(seq 1 200); do
+    curl -s -o /dev/null -w "." \
+      -H "Authorization: Bearer $JWT" \
+      -H "Content-Type: application/json" \
+      -d "{\"videoId\":$VID,\"preset\":\"1080p\"}" \
+      http://localhost:8080/api/jobs &
+    (( $(jobs -r | wc -l) >= PAR )) && wait -n
+  done
+done
+wait; echo

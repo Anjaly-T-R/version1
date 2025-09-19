@@ -10,7 +10,7 @@ function presetArgs(preset, input, output) {
   return ['-i', input, '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac', output];
 }
 
-// system-wide CPU snapshot (portable)
+
 function cpuSnapshot() {
   const cpus = os.cpus();
   let idle = 0, total = 0;
@@ -21,7 +21,7 @@ function cpuSnapshot() {
   return { idle, total };
 }
 
-// derive % CPU between two snapshots
+
 function cpuPercent(s0, s1) {
   const idle = s1.idle - s0.idle;
   const total = s1.total - s0.total;
@@ -36,12 +36,12 @@ export async function startTranscode({ jobId, videoId, preset }) {
   await updateVideoFields(videoId, { status: 'processing' });
   await updateJob(jobId, { status: 'running', started_at: new Date(), progress: 0 });
 
-  // output path (keep alongside input, add preset suffix)
+ 
   const outPath = v.path.replace(/\.([a-z0-9]+)$/i, `.${preset}.mp4`);
   const args = presetArgs(preset, v.path, outPath);
   const p = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
-  // CPU sampling (system-wide)
+  
   let lastSnap = cpuSnapshot();
   let samples = [];
   const cpuTimer = setInterval(async () => {
@@ -52,12 +52,9 @@ export async function startTranscode({ jobId, videoId, preset }) {
     // write a rolling average so GET /jobs shows a live-ish number
     const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
     try { await updateJob(jobId, { cpu_avg: Number(avg.toFixed(2)) }); } catch {}
-  }, 2000); // every 2s
-
-  // progress parsing from ffmpeg stderr
+  }, 2000); 
   p.stderr.on('data', chunk => {
     const s = chunk.toString();
-    // extract processed 'time=' from ffmpeg, needs runtime_sec known
     const m = s.match(/time=(\d+):(\d+):([\d.]+)/);
     if (m && v.runtime_sec) {
       const sec = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
@@ -81,7 +78,7 @@ export async function startTranscode({ jobId, videoId, preset }) {
         });
         await updateVideoFields(videoId, { status: 'done' });
 
-        // optional thumbnail (non-blocking)
+      
         try {
           const thumb = v.path.replace(/\.([a-z0-9]+)$/i, `.thumb.jpg`);
           const tp = spawn('ffmpeg', ['-ss', '00:00:01', '-i', outPath, '-vframes', '1', thumb]);

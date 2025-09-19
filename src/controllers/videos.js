@@ -13,7 +13,7 @@ import {
 } from '../models/videos.js';
 import { enrichByExternalAPI } from '../services/enrich.js';
 
-// Multer temp dir; we'll move to data/uploads after checks
+
 const upload = multer({ dest: 'data/tmp' });
 export const uploadMw = upload.single('file');
 
@@ -30,14 +30,6 @@ function probeDurationSec(filepath) {
   });
 }
 
-/**
- * Upload + Enrich:
- * - auth + 'file' required
- * - duplicate check by (owner, original_name)
- * - move tmp -> data/uploads
- * - insert DB row
- * - best-effort: set runtime_sec via ffprobe; enrich metadata
- */
 export async function uploadAndEnrich(req, res) {
   if (!req.user?.sub) return res.status(401).json({ error: 'unauthorized' });
   if (!req.file) return res.status(400).json({ error: 'form-data field "file" required' });
@@ -72,21 +64,18 @@ export async function uploadAndEnrich(req, res) {
     });
   } catch (e) {
     try { fs.unlinkSync(savePath); } catch {};
-    // 1062 requires UNIQUE(owner, original_name)
     if (e?.errno === 1062) {
       const dupe = await findVideoByOwnerAndName(req.user.sub, req.file.originalname);
       return res.status(409).json({ error: 'duplicate', video: dupe });
     }
     return res.status(500).json({ error: 'db insert failed' });
   }
-
-  // best-effort: runtime_sec
   try {
     const sec = await probeDurationSec(savePath);
     if (sec) await patchVideoMeta(video.id, { runtime_sec: sec });
   } catch {}
 
-  // best-effort: enrichment
+  
   try {
     const meta = await enrichByExternalAPI(req.file.originalname);
     if (meta) await patchVideoMeta(video.id, meta);
