@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { initDb } from './src/db/init.js';
 import routes from './src/routes/index.js';
 
+//Elsa was here
+
 const app = express();
 app.use(cors());
 app.use(express.json());
