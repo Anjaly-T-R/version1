@@ -19,7 +19,7 @@ services:
     build: .
     env_file: .env
     ports:
-      - "8080:4000"
+      - "80:4000"
     depends_on:
       mariadb:
         condition: service_healthy
