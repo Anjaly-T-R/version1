@@ -1,19 +1,30 @@
 import { getConn } from '../db/pool.js';
 
-export async function insertVideo({ owner, originalName, path, size }) {
+export async function insertVideo({ owner, original_name, path, size }) {
   const conn = await getConn();
   try {
     const r = await conn.query(
       'INSERT INTO videos (owner, original_name, path, size) VALUES (?, ?, ?, ?)',
-      [owner, originalName, path, size]
+      [owner, original_name, path, size]
     );
     const rows = await conn.query('SELECT * FROM videos WHERE id=?', [r.insertId]);
     return rows[0];
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 }
 
 export async function patchVideoMeta(id, meta = {}) {
-  const allowed = ['external_title', 'external_overview', 'external_source', 'external_id', 'poster_url', 'runtime_sec', 'thumbnail_path', 'status'];
+  const allowed = [
+    'external_title',
+    'external_overview',
+    'external_source',
+    'external_id',
+    'poster_url',
+    'runtime_sec',
+    'thumbnail_path',
+    'status'
+  ];
   const fields = {};
   for (const k of allowed) if (k in meta) fields[k] = meta[k];
   if (!Object.keys(fields).length) return 0;
@@ -24,7 +35,9 @@ export async function patchVideoMeta(id, meta = {}) {
     const params = [...Object.values(fields), id];
     const r = await conn.query(`UPDATE videos SET ${set} WHERE id=?`, params);
     return r.affectedRows;
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 }
 
 export async function listVideos({ owner, isAdmin, page, limit, status, q }) {
@@ -44,7 +57,9 @@ export async function listVideos({ owner, isAdmin, page, limit, status, q }) {
       [...params, limit, off]
     );
     return { total: Number(totalRows[0].c), items };
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 }
 
 export async function getVideoById(id) {
@@ -52,7 +67,9 @@ export async function getVideoById(id) {
   try {
     const rows = await conn.query('SELECT * FROM videos WHERE id=?', [id]);
     return rows[0] || null;
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 }
 
 export async function updateVideoFields(id, fields) {
@@ -64,7 +81,9 @@ export async function updateVideoFields(id, fields) {
     const params = [...keys.map(k => fields[k]), id];
     const r = await conn.query(`UPDATE videos SET ${set} WHERE id=?`, params);
     return r.affectedRows;
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 }
 
 export async function deleteVideo(id) {
@@ -72,16 +91,20 @@ export async function deleteVideo(id) {
   try {
     const r = await conn.query('DELETE FROM videos WHERE id=?', [id]);
     return r.affectedRows;
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 }
 
-export async function findVideoByOwnerAndName(owner, originalName) {
+export async function findVideoByOwnerAndName(owner, original_name) {
   const conn = await getConn();
   try {
     const rows = await conn.query(
       'SELECT * FROM videos WHERE owner=? AND original_name=? LIMIT 1',
-      [owner, originalName]
+      [owner, original_name]
     );
     return rows[0] || null;
-  } finally { conn.release(); }
+  } finally {
+    conn.release();
+  }
 }
