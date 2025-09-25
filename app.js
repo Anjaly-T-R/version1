@@ -1,10 +1,45 @@
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { initDb } from './src/db/init.js';
-import routes from './src/routes/index.js';
+
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+import { initDb } from "./src/db/init.js";
+import routes from "./src/routes/index.js";
+
+
+#const app = express();
+#app.use(cors());
+#app.use(express.json());
+
+// static for uploaded files
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use("/uploads", express.static(path.join(__dirname, "data", "uploads")));
+
+// health check
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// all routes
+app.use("/api", routes);
+
+// error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ error: err.message || "Internal Server Error" });
+});
+
+app.set("json replacer", (k, v) => (typeof v === "bigint" ? v.toString() : v));
+
+const port = process.env.PORT || 4000;
+initDb()
+  .then(() => {
+    app.listen(port, "0.0.0.0", () => console.log(`API listening on :${port}`));
+  })
+  .catch((err) => {
+    console.error("DB init failed:", err);
+    process.exit(1);
+  });
 
 //Elsa was here
 
