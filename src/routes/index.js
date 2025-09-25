@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import { uploadMw, uploadAndEnrich, list, getOne, updateOne, removeOne } from "../controllers/videos.js";
 import { createJobCtrl, listJobsCtrl, getJobCtrl } from "../controllers/jobs.js";
