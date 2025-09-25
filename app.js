@@ -8,9 +8,24 @@ import routes from './src/routes/index.js';
 
 //Elsa was here
 
+const path = require("path");
+const express = require("express");
 const app = express();
+
+// Serve static files from "public"
+app.use(express.static(path.join(__dirname, "public")));
+
+
+// const app = express();
 app.use(cors());
 app.use(express.json());
+
+const videoRoutes = require("./src/routes/videos");
+const authRoutes = require("./src/routes/auth");
+
+app.use("/api/videos", videoRoutes);
+app.use("/api/auth", authRoutes);
+
 
 // static for uploaded files (optional)
 const __filename = fileURLToPath(import.meta.url);
