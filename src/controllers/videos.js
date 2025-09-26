@@ -1,4 +1,5 @@
 
+import { uploadToS3 } from "../aws/s3.js";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
@@ -49,22 +50,18 @@ export async function uploadAndEnrich(req, res) {
   fs.mkdirSync("data/tmp", { recursive: true });
   fs.mkdirSync("data/uploads", { recursive: true });
 
-  // duplicate check BEFORE moving/saving
+  // duplicate check
   try {
     const duplicate = await findVideoByOwnerAndName(
       req.user.sub,
       req.file.originalname
     );
     if (duplicate) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch {}
+      try { fs.unlinkSync(req.file.path); } catch {}
       return res.status(409).json({ error: "duplicate", video: duplicate });
     }
   } catch (err) {
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch {}
+    try { fs.unlinkSync(req.file.path); } catch {}
     console.error("Duplicate check failed:", err);
     return res.status(500).json({ error: "duplicate check failed" });
   }
@@ -77,9 +74,7 @@ export async function uploadAndEnrich(req, res) {
   try {
     fs.renameSync(req.file.path, savePath);
   } catch (err) {
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch {}
+    try { fs.unlinkSync(req.file.path); } catch {}
     console.error("File save failed:", err);
     return res.status(500).json({ error: "failed to save file" });
   }
@@ -88,23 +83,30 @@ export async function uploadAndEnrich(req, res) {
   try {
     video = await insertVideo({
       owner: req.user.sub,
-      original_name: req.file.originalname, // ✅ matches schema
+      original_name: req.file.originalname,
       path: savePath,
       size: req.file.size,
     });
   } catch (e) {
-    try {
-      fs.unlinkSync(savePath);
-    } catch {}
+    try { fs.unlinkSync(savePath); } catch {}
     if (e?.errno === 1062) {
-      const dupe = await findVideoByOwnerAndName(
-        req.user.sub,
-        req.file.originalname
-      );
+      const dupe = await findVideoByOwnerAndName(req.user.sub, req.file.originalname);
       return res.status(409).json({ error: "duplicate", video: dupe });
     }
     console.error("Video insert failed:", e);
     return res.status(500).json({ error: "db insert failed" });
+  }
+
+
+  try {
+    const buffer = fs.readFileSync(savePath);
+    const s3Key = `videos/${video.id}-${req.file.originalname}`;
+    await uploadToS3(buffer, s3Key, req.file.mimetype);
+    await patchVideoMeta(video.id, { s3_key: s3Key });
+    video.s3_key = s3Key;
+  } catch (err) {
+    console.error("S3 upload failed:", err);
+    // still continue so core upload doesn’t break
   }
 
   // best-effort: runtime_sec

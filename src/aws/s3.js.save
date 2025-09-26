@@ -1,0 +1,15 @@
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+
+const s3 = new S3Client({
+  region: "ap-southeast-2",
+});
+
+export async function uploadToS3(fileBuffer, key, contentType) {
+  const command = new PutObjectCommand({
+    Bucket: "y-mini-app-videos-anjaly", // replace with your bucket name
+    Key: key,                           // e.g. "uploads/video123.mp4"
+    Body: fileBuffer,
+    ContentType: contentType,
+  });
+  return s3.send(command);
+}
