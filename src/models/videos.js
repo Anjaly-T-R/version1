@@ -19,7 +19,8 @@ export async function patchVideoMeta(id, meta = {}) {
     'poster_url',
     'runtime_sec',
     'thumbnail_path',
-    'status'
+    'status',
+    's3_key'
   ];
   const fields = {};
   for (const k of allowed) if (k in meta) fields[k] = meta[k];
