@@ -1,53 +1,98 @@
 import { getConn } from './pool.js';
 
 export async function initDb() {
-  const conn = await getConn();
+  const client = await getConn();
   try {
-    await conn.query(`
+    // Create ENUM types first
+    await client.query(`
+      DO $$ BEGIN
+        CREATE TYPE user_role AS ENUM('user', 'admin');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    await client.query(`
+      DO $$ BEGIN
+        CREATE TYPE video_status AS ENUM('uploaded', 'processing', 'done', 'error');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    await client.query(`
+      DO $$ BEGIN
+        CREATE TYPE external_source AS ENUM('TMDB', 'OMDB');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    await client.query(`
+      DO $$ BEGIN
+        CREATE TYPE job_status AS ENUM('queued', 'running', 'done', 'error');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    // Create tables
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
-        role ENUM('user','admin') DEFAULT 'user'
+        role user_role DEFAULT 'user'
       )
     `);
 
-    await conn.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS videos (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        owner INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        owner INTEGER NOT NULL,
         original_name VARCHAR(255) NOT NULL,
         path VARCHAR(512) NOT NULL,
         size BIGINT,
-        status ENUM('uploaded','processing','done','error') DEFAULT 'uploaded',
-        external_source ENUM('TMDB','OMDB') NULL,
+        status video_status DEFAULT 'uploaded',
+        external_source external_source NULL,
         external_id VARCHAR(64) NULL,
         external_title VARCHAR(255) NULL,
         external_overview TEXT NULL,
         poster_url VARCHAR(512) NULL,
-        runtime_sec INT NULL,
+        runtime_sec INTEGER NULL,
         thumbnail_path VARCHAR(512) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_owner_name (owner, original_name),
-        INDEX idx_videos_status(status),
-        INDEX idx_videos_title(external_title)
+        UNIQUE(owner, original_name)
       )
     `);
 
-    await conn.query(`
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status)
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_videos_title ON videos(external_title)
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS jobs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        video_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        video_id INTEGER NOT NULL,
         preset VARCHAR(50),
-        status ENUM('queued','running','done','error') DEFAULT 'queued',
-        progress TINYINT NOT NULL DEFAULT 0,
+        status job_status DEFAULT 'queued',
+        progress SMALLINT NOT NULL DEFAULT 0,
         cpu_avg DECIMAL(5,2) NULL,
         started_at TIMESTAMP NULL,
-        finished_at TIMESTAMP NULL,
-        INDEX idx_jobs_status(status)
+        finished_at TIMESTAMP NULL
       )
     `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)
+    `);
+
+    console.log('✅ Database tables initialized successfully');
   } finally {
-    conn.release();
+    client.release();
   }
 }
