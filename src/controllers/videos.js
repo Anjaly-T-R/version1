@@ -1,7 +1,6 @@
-
-import { uploadToS3 } from "../aws/s3.js";
 import fs from "fs";
 import path from "path";
+import { uploadToS3 } from "../aws/s3.js";
 import multer from "multer";
 import ffmpeg from "fluent-ffmpeg";
 import {
@@ -14,6 +13,7 @@ import {
   findVideoByOwnerAndName,
 } from "../models/videos.js";
 import { enrichByExternalAPI } from "../services/enrich.js";
+import { getS3DownloadUrl } from "../aws/s3.js";
 
 // Multer temp dir; we'll move to data/uploads after checks
 const upload = multer({ dest: "data/tmp" });
@@ -44,88 +44,60 @@ function probeDurationSec(filepath) {
  */
 export async function uploadAndEnrich(req, res) {
   if (!req.user?.sub) return res.status(401).json({ error: "unauthorized" });
-  if (!req.file)
-    return res.status(400).json({ error: 'form-data field "file" required' });
+  if (!req.file) return res.status(400).json({ error: "file required" });
 
   fs.mkdirSync("data/tmp", { recursive: true });
-  fs.mkdirSync("data/uploads", { recursive: true });
 
-  // duplicate check
-  try {
-    const duplicate = await findVideoByOwnerAndName(
-      req.user.sub,
-      req.file.originalname
-    );
-    if (duplicate) {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(409).json({ error: "duplicate", video: duplicate });
-    }
-  } catch (err) {
-    try { fs.unlinkSync(req.file.path); } catch {}
-    console.error("Duplicate check failed:", err);
-    return res.status(500).json({ error: "duplicate check failed" });
+  // Duplicate check
+  const duplicate = await findVideoByOwnerAndName(req.user.sub, req.file.originalname);
+  if (duplicate) {
+    fs.unlinkSync(req.file.path);
+    return res.status(409).json({ error: "duplicate", video: duplicate });
   }
 
-  const savePath = path.join(
-    "data",
-    "uploads",
-    `${Date.now()}-${req.file.originalname}`
-  );
-  try {
-    fs.renameSync(req.file.path, savePath);
-  } catch (err) {
-    try { fs.unlinkSync(req.file.path); } catch {}
-    console.error("File save failed:", err);
-    return res.status(500).json({ error: "failed to save file" });
-  }
-
+  // Insert row in DB first (so we get an ID)
   let video;
   try {
     video = await insertVideo({
       owner: req.user.sub,
       original_name: req.file.originalname,
-      path: savePath,
+      path: req.file.path,   // temporary, will update later
       size: req.file.size,
+      status: "uploaded"
     });
   } catch (e) {
-    try { fs.unlinkSync(savePath); } catch {}
-    if (e?.errno === 1062) {
-      const dupe = await findVideoByOwnerAndName(req.user.sub, req.file.originalname);
-      return res.status(409).json({ error: "duplicate", video: dupe });
-    }
-    console.error("Video insert failed:", e);
+    fs.unlinkSync(req.file.path);
+    console.error("DB insert failed:", e);
     return res.status(500).json({ error: "db insert failed" });
   }
 
-
   try {
-    const buffer = fs.readFileSync(savePath);
-    const s3Key = `videos/${video.id}-${req.file.originalname}`;
-    await uploadToS3(buffer, s3Key, req.file.mimetype);
-    await patchVideoMeta(video.id, { s3_key: s3Key });
-    video.s3_key = s3Key;
+    // ✅ Upload file to S3
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const key = `videos/${video.id}-${req.file.originalname}`;
+    await uploadToS3(fileBuffer, key, req.file.mimetype);
+
+    // ✅ Update DB with S3 key
+    await patchVideoMeta(video.id, { s3_key: key });
+
+    // ✅ Remove local temp file
+    fs.unlinkSync(req.file.path);
+
+    video.s3_key = key;
   } catch (err) {
     console.error("S3 upload failed:", err);
-    // still continue so core upload doesn’t break
+    return res.status(500).json({ error: "failed to upload to S3" });
   }
 
-  // best-effort: runtime_sec
-  try {
-    const sec = await probeDurationSec(savePath);
-    if (sec) await patchVideoMeta(video.id, { runtime_sec: sec });
-  } catch (err) {
-    console.warn("ffprobe skipped:", err.message);
-  }
-
-  // best-effort: enrichment
+  // Optional: enrichment (IMDb/OMDb/etc.)
   try {
     const meta = await enrichByExternalAPI(req.file.originalname);
     if (meta) await patchVideoMeta(video.id, meta);
   } catch (err) {
-    console.warn("enrich skipped:", err.message);
+    console.warn("Enrichment skipped:", err.message);
   }
 
-  return res.status(201).json(video);
+  res.status(201).json(video);
 }
 
 /** GET /api/videos?page=&limit=&status=&q= */
@@ -178,8 +150,6 @@ export async function updateOne(req, res) {
 export async function removeOne(req, res) {
   const v = await getVideoById(req.params.id);
   if (!v) return res.status(404).json({ error: "not found" });
-  if (req.user.role !== "admin" && v.owner !== req.user.sub)
-    return res.status(403).json({ error: "forbidden" });
 
   try {
     if (v.path) fs.unlinkSync(v.path);
@@ -190,4 +160,18 @@ export async function removeOne(req, res) {
 
   await deleteVideo(req.params.id);
   res.json({ ok: true });
+}
+
+export async function downloadOne(req, res) {
+  const v = await getVideoById(req.params.id);
+  if (!v) return res.status(404).json({ error: "not found" });
+  if (!v.s3_key) return res.status(400).json({ error: "no s3 key stored" });
+
+  try {
+    const url = await getS3DownloadUrl(v.s3_key);
+    res.json({ downloadUrl: url });
+  } catch (err) {
+    console.error("S3 download error:", err);
+    res.status(500).json({ error: "could not generate download link" });
+  }
 }

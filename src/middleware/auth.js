@@ -1,14 +1,16 @@
-import jwt from 'jsonwebtoken';
-
-export function auth(req, res, next) {
-  const h = req.headers.authorization || '';
-  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'missing token' });
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { sub: payload.sub, role: payload.role || 'user' };
-    next();
-  } catch {
-    res.status(401).json({ error: 'invalid token' });
+export function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Not authenticated" });
   }
+  next();
 }
+
+export function requireAdmin(req, res, next) {
+  console.log("Decoded user object:", req.user);
+  const groups = req.user?.groups || [];
+  if (groups.includes("admin")) {
+    return next();
+  }
+  return res.status(403).json({ error: "Admin only action" });
+}
+

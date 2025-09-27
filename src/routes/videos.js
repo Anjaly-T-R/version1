@@ -1,19 +1,8 @@
-// import { Router } from 'express';
-// import { auth } from '../middleware/auth.js';
-// import { uploadMw, uploadAndEnrich, list, getOne, updateOne, removeOne } from '../controllers/videos.js';
-
-// const r = Router();
-// r.post('/upload', auth, uploadMw, uploadAndEnrich);
-// r.get('/', auth, list);                      // supports ?page&limit&status&q
-// r.get('/:id', auth, getOne);
-// r.put('/:id', auth, updateOne);
-// r.delete('/:id', auth, removeOne);
-// export default r;
-
 const express = require("express");
 const router = express.Router();
-const { videoUpload, getPublicUrl } = require("../../s3services");
-const Video = require("../models/videos"); // your DB model
+const { videoUpload, getPublicUrl, deleteFile } = require("../../s3services");
+const Video = require("../models/videos");
+const { cacheGet, cacheSet, cacheDel } = require("../utils/cache.js");
 
 router.post("/upload", videoUpload.single("video"), async (req, res) => {
   try {
@@ -28,6 +17,7 @@ router.post("/upload", videoUpload.single("video"), async (req, res) => {
       user_id: req.user.id,
       s3_url: s3Url
     });
+    await cacheDel("videos:list");
 
     res.json({ success: true, video: newVideo });
   } catch (err) {
@@ -39,7 +29,17 @@ router.post("/upload", videoUpload.single("video"), async (req, res) => {
 
 router.get("/", async (req, res) => {
   try {
-    const videos = await Video.findAll();
+    const cacheKey = "videos:list";
+    let videos = await cacheGet(cacheKey);
+
+    if (!videos) {
+      console.log("Cache miss → querying DB");
+      videos = await Video.findAll();
+      await cacheSet(cacheKey, videos, 120); // cache 2 min
+    } else {
+      console.log("Cache hit");
+    }
+
     res.json({ success: true, videos });
   } catch (err) {
     res.status(500).json({ success: false, message: "Failed to load videos" });
@@ -56,9 +56,11 @@ router.delete("/:id", async (req, res) => {
     await deleteFile(fileKey);
 
     await video.destroy();
+    await cacheDel("videos:list");
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: "Delete failed" });
   }
 });
 
+module.exports = router;

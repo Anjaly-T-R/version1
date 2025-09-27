@@ -12,7 +12,7 @@ export async function authCognito(req, res, next) {
 
   try {
     const payload = await verifier.verify(token);
-    req.user = { sub: payload.sub, email: payload.email };
+    req.user = { sub: payload.sub, email: payload.email, groups: payload["cognito:groups"] || [] };
     next();
   } catch (err) {
     console.error("Cognito token verification failed:", err.message);

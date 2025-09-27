@@ -1,19 +1,43 @@
 import pkg from 'pg';
+import { getParam } from '../config/paramStore.js';
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} from "@aws-sdk/client-secrets-manager";
 const { Pool } = pkg;
 
-export const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  max: 5,
-  ssl: { rejectUnauthorized: false }
-});
+let pool;
 
+async function initPool() {
+  if (!pool) {
+    // fetch DB_NAME from Parameter Store 
+    const dbName = await getParam("/group40/db-name");
+    const client = new SecretsManagerClient({ region: "ap-southeast-2" });
+    const response = await client.send(
+      new GetSecretValueCommand({
+        SecretId: "group40/postgres-credentials", 
+      })
+    );
+    const secret = JSON.parse(response.SecretString);
+
+
+    pool = new Pool({
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT || 5432,
+      user: secret.DB_USER,
+      password: secret.DB_PASSWORD,
+      database: dbName,  
+      max: 5,
+      ssl: { rejectUnauthorized: false },
+    });
+  }
+  return pool;
+}
 
 export async function getConn() {
-  const client = await pool.connect();
-  return client;
+  const db = await initPool();
+  return db.connect();
 }
+export { pool };
+
 
