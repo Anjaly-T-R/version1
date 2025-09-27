@@ -1,5 +1,11 @@
 node_modules
 npm-debug.log
-Dockerfile
-docker-compose.yml
-.env
+.git
+.gitignore
+README.md
+.env.local
+.env.*.local
+coverage
+.nyc_output
+data/tmp/*
+data/uploads/*

@@ -1,15 +1,36 @@
+version: '3.8'
 
 services:
-  api:
+  app:
     build: .
-    env_file: .env
     ports:
-      - "80:4000"
+      - "8080:4000"
+    environment:
+      # Database
+      - DB_HOST=database-1-instance-1.ce2haupt2cta.ap-southeast-2.rds.amazonaws.com
+      - DB_PORT=5432
+      - DB_USER=s408
+      - DB_PASSWORD=FPzoBUiC7eTX
+      - DB_NAME=cohort_2025
+      
+      # JWT
+      - JWT_SECRET=supersecret
+      
+      # Cognito
+      - COGNITO_REGION=ap-southeast-2
+      - COGNITO_USER_POOL_ID=ap-southeast-2_pUJG0bqsD
+      - COGNITO_CLIENT_ID=43d7dmr0mafg971ia251vi8vg6
+      - COGNITO_CLIENT_SECRET=1t4hf3lds210h1vfoptvpofirom9uvs4uangmjnh2ae3bidjrgsq
+      
+      # AWS
+      - AWS_ACCESS_KEY_ID=ASIA5DYSEEJ4ZMDAOQEC
+      - AWS_SECRET_ACCESS_KEY=qXELOAR3/Y/PcE++ERJwSbneMzBoCtUbh9asH3dy
+      - AWS_SESSION_TOKEN=IQoJb3JpZ2luX2VjEAcaDmFwLXNvdXRoZWFzdC0yIkYwRAIgT6QhT5WqHPsBa/POt4+z5JGZOEaV/BOUapIOQ7FfYFgCIBj5SHEufpl4WM6SrcwcZtE5zOZZugl1o9jw2LTxPmRAKq0
+      - AWS_REGION=ap-southeast-2
+      - S3_BUCKET=n12045098-mini-youtube-app
+      
+      # App
+      - PORT=4000
     volumes:
       - ./data:/app/data
-    environment:
-      DB_HOST: database-1-instance-1.ce2haupt2cta.ap-southeast-2.rds.amazonaws.com
-      DB_PORT: 5432
-      DB_USER: s408
-      DB_PASSWORD: FPzoBUiC7eTX
-      DB_NAME: cohort_2025
+    restart: unless-stopped

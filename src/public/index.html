@@ -1,5 +1,3 @@
-<!--Had assistance from Claude AI in setting up a clean user interface design and layout.-->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -284,23 +282,15 @@
             <!-- Login Form -->
             <div id="loginForm" class="form-section">
                 <h2>Welcome Back!</h2>
-                <p style="margin-bottom: 20px; color: #666;">Use these test accounts:</p>
-                <ul style="margin-bottom: 20px; color: #666;">
-                    <li>john@example.com</li>
-                    <li>sarah@example.com</li>
-                    <li>mike@example.com</li>
-                    <li>admin@example.com</li>
-                    <li>test@example.com</li>
-                    <li><strong>Password for all: password123</strong></li>
-                </ul>
+                <p style="margin-bottom: 20px; color: #666;">Enter your Cognito credentials</p>
                 
                 <div class="form-group">
-                    <label>Email:</label>
-                    <input type="email" id="loginEmail" placeholder="Enter your email" value="john@example.com">
+                    <label>Username:</label>
+                    <input type="text" id="loginUsername" placeholder="Enter your username">
                 </div>
                 <div class="form-group">
                     <label>Password:</label>
-                    <input type="password" id="loginPassword" placeholder="Enter your password" value="password123">
+                    <input type="password" id="loginPassword" placeholder="Enter your password">
                 </div>
                 <button class="btn" onclick="login()">Login</button>
             </div>
@@ -318,14 +308,7 @@
                 </div>
                 <div class="form-group">
                     <label>Password:</label>
-                    <input type="password" id="registerPassword" placeholder="Create a password">
-                </div>
-                <div class="form-group">
-                    <label>Role:</label>
-                    <select id="registerRole">
-                        <option value="musician">Musician</option>
-                        <option value="listener">Listener</option>
-                    </select>
+                    <input type="password" id="registerPassword" placeholder="Create a password (min 8 chars)">
                 </div>
                 <button class="btn" onclick="register()">Register</button>
             </div>
@@ -336,7 +319,7 @@
             <!-- User Info -->
             <div id="userInfo" class="user-info">
                 <h3>Welcome, <span id="usernameDisplay"></span>!</h3>
-                <p>Role: <span id="userRole"></span> | Email: <span id="userEmail"></span></p>
+                <p>Email: <span id="userEmail"></span></p>
                 <button class="btn btn-secondary" onclick="logout()">Logout</button>
             </div>
 
@@ -351,14 +334,6 @@
                 </div>
                 <input type="file" id="videoFile" accept="video/*" style="display: none;" onchange="handleFileSelect(this)">
                 
-                <div class="form-group">
-                    <label>Video Title:</label>
-                    <input type="text" id="videoTitle" placeholder="Enter video title">
-                </div>
-                <div class="form-group">
-                    <label>Description:</label>
-                    <textarea id="videoDescription" placeholder="Describe your video..." rows="3"></textarea>
-                </div>
                 <button class="btn" onclick="uploadVideo()" id="uploadBtn">Upload Video</button>
             </div>
 
@@ -379,7 +354,7 @@
     <script>
         let currentUser = null;
         let authToken = null;
-        const API_BASE = '/api'; // Use relative URL since we're serving from same domain
+        const API_BASE = '/api';
 
         // Tab switching
         function switchTab(tab) {
@@ -409,12 +384,48 @@
             }, 5000);
         }
 
+        // Register function - no confirmation needed
+        async function register() {
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+
+            if (!username || !email || !password) {
+                showAlert('Please fill in all fields', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/signup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showAlert('Registration successful! You can now login.');
+                    // Auto-switch to login tab and fill username
+                    switchTab('login');
+                    document.getElementById('loginUsername').value = username;
+                } else {
+                    showAlert(data.error || 'Registration failed', 'error');
+                }
+            } catch (error) {
+                console.error('Register error:', error);
+                showAlert('Connection error. Please try again.', 'error');
+            }
+        }
+
         // Login function
         async function login() {
-            const email = document.getElementById('loginEmail').value;
+            const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
 
-            if (!email || !password) {
+            if (!username || !password) {
                 showAlert('Please fill in all fields', 'error');
                 return;
             }
@@ -425,76 +436,29 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ username, password })
                 });
 
                 const data = await response.json();
 
-                if (data.success) {
-                    currentUser = data.user;
-                    authToken = data.token;
+                if (response.ok && data.tokens) {
+                    authToken = data.tokens.IdToken;
+                    currentUser = { username };
                     
                     // Update UI
                     document.getElementById('authSection').classList.add('hidden');
                     document.getElementById('mainContent').classList.remove('hidden');
                     
-                    document.getElementById('usernameDisplay').textContent = currentUser.username;
-                    document.getElementById('userRole').textContent = currentUser.role;
-                    document.getElementById('userEmail').textContent = currentUser.email;
+                    document.getElementById('usernameDisplay').textContent = username;
+                    document.getElementById('userEmail').textContent = 'Logged in via Cognito';
                     
                     showAlert('Login successful!');
                     loadVideos();
                 } else {
-                    showAlert(data.message || 'Login failed', 'error');
+                    showAlert(data.error || 'Login failed', 'error');
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                showAlert('Connection error. Please try again.', 'error');
-            }
-        }
-
-        // Register function
-        async function register() {
-            const username = document.getElementById('registerUsername').value;
-            const email = document.getElementById('registerEmail').value;
-            const password = document.getElementById('registerPassword').value;
-            const role = document.getElementById('registerRole').value;
-
-            if (!username || !email || !password) {
-                showAlert('Please fill in all fields', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/auth/register`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, email, password, role })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    currentUser = data.user;
-                    authToken = data.token;
-                    
-                    // Update UI
-                    document.getElementById('authSection').classList.add('hidden');
-                    document.getElementById('mainContent').classList.remove('hidden');
-                    
-                    document.getElementById('usernameDisplay').textContent = currentUser.username;
-                    document.getElementById('userRole').textContent = currentUser.role;
-                    document.getElementById('userEmail').textContent = currentUser.email;
-                    
-                    showAlert('Registration successful!');
-                    loadVideos();
-                } else {
-                    showAlert(data.message || 'Registration failed', 'error');
-                }
-            } catch (error) {
-                console.error('Register error:', error);
                 showAlert('Connection error. Please try again.', 'error');
             }
         }
@@ -508,8 +472,8 @@
             document.getElementById('mainContent').classList.add('hidden');
             
             // Clear forms
-            document.getElementById('loginEmail').value = 'john@example.com';
-            document.getElementById('loginPassword').value = 'password123';
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
             document.getElementById('registerUsername').value = '';
             document.getElementById('registerEmail').value = '';
             document.getElementById('registerPassword').value = '';
@@ -528,16 +492,9 @@
         // Upload video function
         async function uploadVideo() {
             const fileInput = document.getElementById('videoFile');
-            const title = document.getElementById('videoTitle').value;
-            const description = document.getElementById('videoDescription').value;
 
             if (!fileInput.files[0]) {
                 showAlert('Please select a video file', 'error');
-                return;
-            }
-
-            if (!title) {
-                showAlert('Please enter a video title', 'error');
                 return;
             }
 
@@ -548,9 +505,7 @@
 
             try {
                 const formData = new FormData();
-                formData.append('video', fileInput.files[0]);
-                formData.append('title', title);
-                formData.append('description', description);
+                formData.append('file', fileInput.files[0]);
 
                 const response = await fetch(`${API_BASE}/videos/upload`, {
                     method: 'POST',
@@ -562,18 +517,12 @@
 
                 const data = await response.json();
 
-                if (data.success) {
+                if (response.ok) {
                     showAlert('Video uploaded successfully!');
-                    
-                    // Clear form
                     fileInput.value = '';
-                    document.getElementById('videoTitle').value = '';
-                    document.getElementById('videoDescription').value = '';
-                    
-                    // Reload videos
                     loadVideos();
                 } else {
-                    showAlert(data.message || 'Upload failed', 'error');
+                    showAlert(data.error || 'Upload failed', 'error');
                 }
             } catch (error) {
                 console.error('Upload error:', error);
@@ -587,11 +536,16 @@
         // Load videos function
         async function loadVideos() {
             try {
-                const response = await fetch(`${API_BASE}/videos`);
+                const response = await fetch(`${API_BASE}/videos`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
                 const data = await response.json();
 
-                if (data.success) {
-                    displayVideos(data.videos);
+                if (response.ok) {
+                    displayVideos(data.items || []);
                 } else {
                     showAlert('Failed to load videos', 'error');
                 }
@@ -612,90 +566,24 @@
 
             videoGrid.innerHTML = videos.map(video => `
                 <div class="video-card">
-                    <h3>${video.title}</h3>
+                    <h3>${video.original_name}</h3>
                     <div class="video-meta">
-                        By: ${video.username} | Views: ${video.views || 0} | ${new Date(video.created_at).toLocaleDateString()}
+                        Owner: ${video.owner} | ${video.size ? (video.size / 1024 / 1024).toFixed(2) + ' MB' : ''} | ${new Date(video.created_at).toLocaleDateString()}
                     </div>
-                    <video controls>
-                        <source src="${video.s3_url}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                    <p>${video.description || 'No description provided.'}</p>
-                    ${currentUser && currentUser.id === video.user_id ? 
-                        `<button class="btn btn-danger btn-sm" onclick="deleteVideo(${video.id})">Delete</button>` : 
-                        ''
-                    }
+                    ${video.s3_key ? `
+                        <video controls>
+                            <source src="https://n12045098-mini-youtube-app.s3.ap-southeast-2.amazonaws.com/${video.s3_key}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    ` : '<p>Video processing...</p>'}
+                    ${video.external_overview ? `<p>${video.external_overview}</p>` : ''}
+                    <div style="margin-top: 10px;">
+                        <span style="padding: 3px 8px; background: #f0f0f0; border-radius: 10px; font-size: 0.8rem;">
+                            ${video.status || 'uploaded'}
+                        </span>
+                    </div>
                 </div>
             `).join('');
-        }
-
-        // Delete video function
-        async function deleteVideo(videoId) {
-            if (!confirm('Are you sure you want to delete this video?')) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/videos/${videoId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    }
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showAlert('Video deleted successfully');
-                    loadVideos();
-                } else {
-                    showAlert(data.message || 'Failed to delete video', 'error');
-                }
-            } catch (error) {
-                console.error('Delete error:', error);
-                showAlert('Failed to delete video', 'error');
-            }
-        }
-
-        // Drag and drop functionality
-        const uploadArea = document.querySelector('.upload-area');
-        
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            uploadArea.addEventListener(eventName, preventDefaults, false);
-            document.body.addEventListener(eventName, preventDefaults, false);
-        });
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            uploadArea.addEventListener(eventName, highlight, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            uploadArea.addEventListener(eventName, unhighlight, false);
-        });
-
-        uploadArea.addEventListener('drop', handleDrop, false);
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        function highlight(e) {
-            uploadArea.classList.add('dragover');
-        }
-
-        function unhighlight(e) {
-            uploadArea.classList.remove('dragover');
-        }
-
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-
-            if (files.length > 0) {
-                document.getElementById('videoFile').files = files;
-                handleFileSelect(document.getElementById('videoFile'));
-            }
         }
 
         // Initialize the app
